@@ -59,3 +59,19 @@ export type ListingsResponse = {
   items: ListingItem[];
   total: number;
 };
+
+export type SearchJob = {
+  id: string;
+  status: string;
+  addedCount: number;
+  updatedCount: number;
+  failedCount: number;
+  sourceSummary?: Record<string, unknown> | null;
+  completedAt?: string | null;
+  errorLog?: string | null;
+};
+
+export type StartedSearchJob = {
+  jobId: string;
+  status: string;
+};

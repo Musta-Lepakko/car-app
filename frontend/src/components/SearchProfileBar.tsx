@@ -1,16 +1,18 @@
-import { RefreshCcw } from 'lucide-react';
+import { LoaderCircle, RefreshCcw } from 'lucide-react';
 import type { SearchProfile } from '../types';
 
 export default function SearchProfileBar({
   profiles,
   selectedId,
   onSelectedIdChange,
-  onRefresh
+  onRefresh,
+  isUpdating
 }: {
   profiles: SearchProfile[];
   selectedId: string;
   onSelectedIdChange: (value: string) => void;
   onRefresh: () => void;
+  isUpdating: boolean;
 }) {
   const selected = profiles.find((p) => p.id === selectedId);
 
@@ -27,7 +29,7 @@ export default function SearchProfileBar({
       <div className="profile-actions">
         <label className="field compact-field">
           <span>Search profile</span>
-          <select value={selectedId} onChange={(e) => onSelectedIdChange(e.target.value)}>
+          <select value={selectedId} onChange={(e) => onSelectedIdChange(e.target.value)} disabled={isUpdating}>
             {profiles.map((profile) => (
               <option key={profile.id} value={profile.id}>
                 {profile.name}
@@ -36,9 +38,9 @@ export default function SearchProfileBar({
           </select>
         </label>
 
-        <button className="primary-button" onClick={onRefresh} type="button">
-          <RefreshCcw size={16} />
-          Update results
+        <button className="primary-button" onClick={onRefresh} type="button" disabled={isUpdating || !selectedId}>
+          {isUpdating ? <LoaderCircle size={16} className="spin" /> : <RefreshCcw size={16} />}
+          {isUpdating ? 'Updating…' : 'Update results'}
         </button>
       </div>
 

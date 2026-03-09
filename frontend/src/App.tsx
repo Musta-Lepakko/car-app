@@ -4,8 +4,8 @@ import FilterBar, { type LocalFilters } from './components/FilterBar';
 import ListingCard from './components/ListingCard';
 import SearchProfileBar from './components/SearchProfileBar';
 import DetailPanel from './components/DetailPanel';
-import { getHealth, getListings, getSearchProfiles, patchListingState } from './lib/api';
-import type { ListingItem, SearchProfile } from './types';
+import { createSearchJob, getHealth, getListings, getSearchJob, getSearchProfiles, patchListingState } from './lib/api';
+import type { ListingItem, SearchJob, SearchProfile } from './types';
 
 const initialFilters: LocalFilters = {
   favoritesOnly: false,
@@ -18,6 +18,8 @@ const initialFilters: LocalFilters = {
   brand: ''
 };
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export default function App() {
   const [profiles, setProfiles] = useState<SearchProfile[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState('');
@@ -27,6 +29,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [healthOk, setHealthOk] = useState<boolean | null>(null);
   const [message, setMessage] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const loadProfiles = async () => {
     const data = await getSearchProfiles();
@@ -61,6 +64,44 @@ export default function App() {
     }
   };
 
+  const pollSearchJob = async (jobId: string) => {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const job = await getSearchJob(jobId);
+      if (job.status === 'complete' || job.status === 'failed' || job.status === 'partial') {
+        return job;
+      }
+      await sleep(1000);
+    }
+    throw new Error('Search job timed out.');
+  };
+
+  const handleUpdateResults = async () => {
+    if (!selectedProfileId || isUpdating) return;
+
+    setIsUpdating(true);
+    setMessage('Starting refresh…');
+
+    try {
+      const started = await createSearchJob(selectedProfileId);
+      const finished = await pollSearchJob(started.jobId);
+
+      await loadProfiles();
+      await loadListings(selectedProfileId);
+
+      if (finished.status === 'complete') {
+        setMessage(`Update finished. ${finished.updatedCount} stored listing${finished.updatedCount === 1 ? '' : 's'} checked.`);
+      } else if (finished.status === 'partial') {
+        setMessage(`Update finished with partial issues. ${finished.updatedCount} checked, ${finished.failedCount} failed.`);
+      } else {
+        setMessage(`Update failed: ${finished.errorLog ?? 'Unknown error'}`);
+      }
+    } catch (err) {
+      setMessage(`Update failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   useEffect(() => {
     getHealth().then((res) => setHealthOk(res.ok)).catch(() => setHealthOk(false));
     loadProfiles().catch((err) => setMessage(`Profile load failed: ${String(err)}`));
@@ -91,7 +132,8 @@ export default function App() {
           profiles={profiles}
           selectedId={selectedProfileId}
           onSelectedIdChange={setSelectedProfileId}
-          onRefresh={() => void loadListings(selectedProfileId)}
+          onRefresh={() => void handleUpdateResults()}
+          isUpdating={isUpdating}
         />
 
         <div className="summary-row">

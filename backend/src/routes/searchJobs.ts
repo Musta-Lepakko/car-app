@@ -10,7 +10,7 @@ export async function searchJobsRoutes(app: FastifyInstance) {
     try {
       const body = createSchema.parse(request.body);
       const job = await createSearchJob(body.profileId);
-      return reply.code(201).send(job);
+      return reply.code(202).send(job);
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Invalid request' });
     }

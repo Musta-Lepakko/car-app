@@ -1,12 +1,7 @@
-import type { ListingsResponse, ListingItem, SearchProfile } from '../types';
+import type { ListingsResponse, ListingItem, SearchJob, SearchProfile, StartedSearchJob } from '../types';
 
 const jsonHeaders = { 'Content-Type': 'application/json' };
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
-
-function apiUrl(path: string) {
-  if (!API_BASE) return path;
-  return `${API_BASE}${path}`;
-}
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 
 type BackendSearchProfile = {
   id: string;
@@ -68,6 +63,21 @@ type BackendListingsResponse = {
   items: BackendListingRow[];
   total: number;
 };
+
+type BackendSearchJob = {
+  id: string;
+  status: string;
+  added_count: number;
+  updated_count: number;
+  failed_count: number;
+  source_summary?: Record<string, unknown> | null;
+  completed_at?: string | null;
+  error_log?: string | null;
+};
+
+function toApiUrl(path: string) {
+  return apiBaseUrl ? `${apiBaseUrl}${path}` : path;
+}
 
 async function check<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -138,17 +148,30 @@ function mapListingRow(row: BackendListingRow): ListingItem {
   };
 }
 
+function mapSearchJob(row: BackendSearchJob): SearchJob {
+  return {
+    id: row.id,
+    status: row.status,
+    addedCount: row.added_count ?? 0,
+    updatedCount: row.updated_count ?? 0,
+    failedCount: row.failed_count ?? 0,
+    sourceSummary: row.source_summary ?? null,
+    completedAt: row.completed_at ?? null,
+    errorLog: row.error_log ?? null
+  };
+}
+
 export async function getHealth() {
-  return check<{ ok: boolean }>(await fetch(apiUrl('/health')));
+  return check<{ ok: boolean }>(await fetch(toApiUrl('/health')));
 }
 
 export async function getSearchProfiles() {
-  const rows = await check<BackendSearchProfile[]>(await fetch(apiUrl('/api/search-profiles')));
+  const rows = await check<BackendSearchProfile[]>(await fetch(toApiUrl('/api/search-profiles')));
   return rows.map(mapSearchProfile);
 }
 
 export async function getListings(params: URLSearchParams): Promise<ListingsResponse> {
-  const data = await check<BackendListingsResponse>(await fetch(apiUrl(`/api/listings?${params.toString()}`)));
+  const data = await check<BackendListingsResponse>(await fetch(toApiUrl(`/api/listings?${params.toString()}`)));
   return {
     items: data.items.map(mapListingRow),
     total: data.total
@@ -160,10 +183,25 @@ export async function patchListingState(
   payload: { favorite?: boolean; shortlisted?: boolean; rejected?: boolean; notes?: string | null }
 ) {
   return check(
-    await fetch(apiUrl(`/api/listings/${listingId}/state`), {
+    await fetch(toApiUrl(`/api/listings/${listingId}/state`), {
       method: 'PATCH',
       headers: jsonHeaders,
       body: JSON.stringify(payload)
     })
   );
+}
+
+export async function createSearchJob(profileId: string): Promise<StartedSearchJob> {
+  return check(
+    await fetch(toApiUrl('/api/search-jobs'), {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ profileId })
+    })
+  );
+}
+
+export async function getSearchJob(jobId: string): Promise<SearchJob> {
+  const data = await check<BackendSearchJob>(await fetch(toApiUrl(`/api/search-jobs/${jobId}`)));
+  return mapSearchJob(data);
 }
